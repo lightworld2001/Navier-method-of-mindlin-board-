@@ -1,1 +1,1 @@
-# Navier-method-of-mindlin-board-
+# Navier-method-of-mindlin-board
