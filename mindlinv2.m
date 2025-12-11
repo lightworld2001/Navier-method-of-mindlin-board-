@@ -54,10 +54,30 @@ w_yy = diff(w_expr, y, 2);
 w_xy = diff(diff(w_expr, x), y);
 
 U_b = 0.5*D*(w_xx^2 + w_yy^2 + 2*nu*w_xx*w_yy + 2*(1-nu)*w_xy^2);
-% 外载荷项只在指定区间积分
-W_ext = int(int(q*w_expr, x, x1, x2), y, y1, y2);
+% 将载荷 q 表示为 Fourier 级数（与基函数相同的 phi 系列），便于与试函数正交
+Q = sym('Q', [num 1]); % 若有数值系数，可 later 赋值 Q_vals 并做 double(Q_vals)
+q_expr = 0;
+for k = 1:num
+    mm = m_vec(k); nn = n_vec(k);
+    if mm > 0 && nn > 0
+        phi_k = sin(mm*pi*x/a) * cos(nn*pi*y/b);
+    elseif mm < 0 && nn < 0
+        phi_k = cos(mm*pi*x/a) * sin(nn*pi*y/b);
+    elseif mm > 0 && nn < 0
+        phi_k = sin(mm*pi*x/a) * sin(nn*pi*y/b);
+    elseif mm < 0 && nn > 0
+        phi_k = cos(mm*pi*x/a) * cos(nn*pi*y/b);
+    else
+        phi_k = 0;
+    end
+    q_expr = q_expr + Q(k)*phi_k;
+end
+% 指定载荷作用矩形区域（可修改），若为圆形请用极坐标数值积分
+x1 = 10; x2 = 40; y1 = 10; y2 = 40;
+W_ext = int(int(q_expr * w_expr, x, x1, x2), y, y1, y2);
 
 % 离散罚系数参数区（位置可自定义）
+%----------------------------------------------------这里是离散罚系数参数区(刚度自定义)
 k0_norm = [0.2, 0.4, 0.6, 0.8]; % x=0侧归一化位置（0~1）
 N_k0 = numel(k0_norm); % x=0处离散点数
 y_k0 = k0_norm * b; % x=0处离散点位置（单位mm）
@@ -107,7 +127,7 @@ B_num = double(B_vec);
 Aw_num = A_num \ B_vec;
 
 % 数值场表达式与绘图
-
+%----------------------------------------------------这里是数值场表达式与绘图
 Nx = 40; Ny = 40;
 xv = linspace(0,a,Nx); yv = linspace(0,b,Ny);
 [X,Y] = meshgrid(xv,yv);
@@ -134,3 +154,83 @@ end
 
 figure;
 surf(X,Y,w_num); title('Kirchhoff板挠度w'); xlabel('x'); ylabel('y'); zlabel('w'); colorbar;
+
+% ---------------- 载荷输入接口（可修改） ----------------
+% 你可以使用下面三种方式之一来定义载荷系数 Q:
+% 1) 直接提供数值向量 Q_vals (num x 1)
+%    例： Q_vals = zeros(num,1); Q_vals(1)=500; % 以基函数1为主载荷
+% 2) 如果已有常数面载荷 q0, 可设置 compute_projection = true
+%    脚本会把常数载荷在指定区域上投影到基上，得到 Q_vals
+% 3) 都不设置 -> 保持符号向量 Q（之前的行为）
+
+% 示例（取消注释并按需修改）:
+% Q_vals = zeros(num,1); Q_vals(1) = 1.0; % 用户自行定义数值系数
+% compute_projection = true; % 若为 true，会用 q (脚本顶部的 q 变量) 投影到基上
+
+% 如果要求投影，请确保 x1,x2,y1,y2 已定义（载荷作用区）
+if exist('compute_projection','var') && compute_projection
+    Q_vals = zeros(num,1);
+    for k = 1:num
+        mm = m_vec(k); nn = n_vec(k);
+        if mm > 0 && nn > 0
+            phi_k = sin(mm*pi*x/a) * cos(nn*pi*y/b);
+        elseif mm < 0 && nn < 0
+            phi_k = cos(mm*pi*x/a) * sin(nn*pi*y/b);
+        elseif mm > 0 && nn < 0
+            phi_k = sin(mm*pi*x/a) * sin(nn*pi*y/b);
+        elseif mm < 0 && nn > 0
+            phi_k = cos(mm*pi*x/a) * cos(nn*pi*y/b);
+        else
+            phi_k = 0;
+        end
+        numInt = int(int(q * phi_k, x, x1, x2), y, y1, y2);
+        denInt = int(int(phi_k^2, x, x1, x2), y, y1, y2);
+        numVal = double(numInt);
+        denVal = double(denInt);
+        if denVal == 0
+            Q_vals(k) = 0;
+        else
+            Q_vals(k) = numVal / denVal;
+        end
+    end
+end
+
+% 如果用户提供了数值 Q_vals，使用它来构造 q_expr（覆盖符号 Q）
+if exist('Q_vals','var') && numel(Q_vals) == num
+    q_expr = 0;
+    for k = 1:num
+        mm = m_vec(k); nn = n_vec(k);
+        if mm > 0 && nn > 0
+            phi_k = sin(mm*pi*x/a) * cos(nn*pi*y/b);
+        elseif mm < 0 && nn < 0
+            phi_k = cos(mm*pi*x/a) * sin(nn*pi*y/b);
+        elseif mm > 0 && nn < 0
+            phi_k = sin(mm*pi*x/a) * sin(nn*pi*y/b);
+        elseif mm < 0 && nn > 0
+            phi_k = cos(mm*pi*x/a) * cos(nn*pi*y/b);
+        else
+            phi_k = 0;
+        end
+        q_expr = q_expr + Q_vals(k) * phi_k;
+    end
+else
+    % 默认符号定义（如果没有提供 Q_vals）
+    Q = sym('Q', [num 1]); % 符号载荷系数
+    q_expr = 0;
+    for k = 1:num
+        mm = m_vec(k); nn = n_vec(k);
+        if mm > 0 && nn > 0
+            phi_k = sin(mm*pi*x/a) * cos(nn*pi*y/b);
+        elseif mm < 0 && nn < 0
+            phi_k = cos(mm*pi*x/a) * sin(nn*pi*y/b);
+        elseif mm > 0 && nn < 0
+            phi_k = sin(mm*pi*x/a) * sin(nn*pi*y/b);
+        elseif mm < 0 && nn > 0
+            phi_k = cos(mm*pi*x/a) * cos(nn*pi*y/b);
+        else
+            phi_k = 0;
+        end
+        q_expr = q_expr + Q(k) * phi_k;
+    end
+end
+% ---------------- 载荷输入接口结束 ----------------
