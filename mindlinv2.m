@@ -76,64 +76,7 @@ end
 x1 = 10; x2 = 40; y1 = 10; y2 = 40;
 
 % ---------------- 载荷输入接口（可修改） ----------------
-% 你可以使用下面三种方式之一来定义载荷系数 Q:
-% 1) 直接提供数值向量 Q_vals (num x 1)
-%    例： Q_vals = zeros(num,1); Q_vals(1)=500; % 以基函数1为主载荷
-% 2) 如果已有常数面载荷 q0, 可设置 compute_projection = true
-%    脚本会把常数载荷在指定区域上投影到基上，得到 Q_vals
-% 3) 都不设置 -> 保持符号向量 Q（之前的行为）
-
-% 示例（取消注释并按需修改）:
-% Q_vals = zeros(num,1); Q_vals(1) = 1.0; % 用户自行定义数值系数
-% compute_projection = true; % 若为 true，会用 q (脚本顶部的 q 变量) 投影到基上
-
-% 如果要求投影，请确保 x1,x2,y1,y2 已定义（载荷作用区）
-if exist('compute_projection','var') && compute_projection
-    Q_vals = zeros(num,1);
-    for k = 1:num
-        mm = m_vec(k); nn = n_vec(k);
-        if mm > 0 && nn > 0
-            phi_k = sin(mm*pi*x/a) * cos(nn*pi*y/b);
-        elseif mm < 0 && nn < 0
-            phi_k = cos(mm*pi*x/a) * sin(nn*pi*y/b);
-        elseif mm > 0 && nn < 0
-            phi_k = sin(mm*pi*x/a) * sin(nn*pi*y/b);
-        elseif mm < 0 && nn > 0
-            phi_k = cos(mm*pi*x/a) * cos(nn*pi*y/b);
-        else
-            phi_k = 0;
-        end
-        numInt = int(int(q * phi_k, x, x1, x2), y, y1, y2);
-        denInt = int(int(phi_k^2, x, x1, x2), y, y1, y2);
-        numVal = double(numInt);
-        denVal = double(denInt);
-        if denVal == 0
-            Q_vals(k) = 0;
-        else
-            Q_vals(k) = numVal / denVal;
-        end
-    end
-end
-
-% 如果用户提供了数值 Q_vals，使用它来构造 q_expr（覆盖符号 Q）
-if exist('Q_vals','var') && numel(Q_vals) == num
-    q_expr = 0;
-    for k = 1:num
-        mm = m_vec(k); nn = n_vec(k);
-        if mm > 0 && nn > 0
-            phi_k = sin(mm*pi*x/a) * cos(nn*pi*y/b);
-        elseif mm < 0 && nn < 0
-            phi_k = cos(mm*pi*x/a) * sin(nn*pi*y/b);
-        elseif mm > 0 && nn < 0
-            phi_k = sin(mm*pi*x/a) * sin(nn*pi*y/b);
-        elseif mm < 0 && nn > 0
-            phi_k = cos(mm*pi*x/a) * cos(nn*pi*y/b);
-        else
-            phi_k = 0;
-        end
-        q_expr = q_expr + Q_vals(k) * phi_k;
-    end
-end
+% 符号求解：保持载荷系数 Q 为符号向量，与试函数基一一对应。
 % ---------------- 载荷输入接口结束 ----------------
 
 W_ext = int(int(q_expr * w_expr, x, x1, x2), y, y1, y2);
