@@ -127,35 +127,37 @@ for i = 1:length(vars)
     eqs = [eqs; diff(Pi, vars(i)) == 0];
 end
 [A_mat, B_vec] = equationsToMatrix(eqs, vars);
-A_num = double(A_mat);
-B_num = double(B_vec);
-Aw_num = A_num \ B_num;
+Aw_sym = A_mat \ B_vec; % 纯符号解（与 Q 等符号系数保持一致）
 
-% 数值场表达式与绘图
-%----------------------------------------------------这里是数值场表达式与绘图
-Nx = 40; Ny = 40;
-xv = linspace(0,a,Nx); yv = linspace(0,b,Ny);
-[X,Y] = meshgrid(xv,yv);
-w_num = zeros(Ny,Nx);
-for i = 1:Nx
-    for j = 1:Ny
-        for k = 1:num
-            mm = m_vec(k); nn = n_vec(k);
-            if mm > 0 && nn > 0
-                phi = sin(mm*pi*xv(i)/a) * cos(nn*pi*yv(j)/b);
-            elseif mm < 0 && nn < 0
-                phi = cos(mm*pi*xv(i)/a) * sin(nn*pi*yv(j)/b);
-            elseif mm > 0 && nn < 0
-                phi = sin(mm*pi*xv(i)/a) * sin(nn*pi*yv(j)/b);
-            elseif mm < 0 && nn > 0
-                phi = cos(mm*pi*xv(i)/a) * cos(nn*pi*yv(j)/b);
-            else
-                phi = 0;
+% 如果提供数值载荷系数 Q_vals，可用于数值绘图（不影响符号求解）
+if exist('Q_vals','var') && numel(Q_vals) == num
+    Aw_num = double(subs(Aw_sym, Q, Q_vals(:)));
+    % 数值场表达式与绘图
+    %----------------------------------------------------这里是数值场表达式与绘图
+    Nx = 40; Ny = 40;
+    xv = linspace(0,a,Nx); yv = linspace(0,b,Ny);
+    [X,Y] = meshgrid(xv,yv);
+    w_num = zeros(Ny,Nx);
+    for i = 1:Nx
+        for j = 1:Ny
+            for k = 1:num
+                mm = m_vec(k); nn = n_vec(k);
+                if mm > 0 && nn > 0
+                    phi = sin(mm*pi*xv(i)/a) * cos(nn*pi*yv(j)/b);
+                elseif mm < 0 && nn < 0
+                    phi = cos(mm*pi*xv(i)/a) * sin(nn*pi*yv(j)/b);
+                elseif mm > 0 && nn < 0
+                    phi = sin(mm*pi*xv(i)/a) * sin(nn*pi*yv(j)/b);
+                elseif mm < 0 && nn > 0
+                    phi = cos(mm*pi*xv(i)/a) * cos(nn*pi*yv(j)/b);
+                else
+                    phi = 0;
+                end
+                w_num(j,i) = w_num(j,i) + Aw_num(k)*phi;
             end
-            w_num(j,i) = w_num(j,i) + Aw_num(k)*phi;
         end
     end
-end
 
-figure;
-surf(X,Y,w_num); title('Kirchhoff板挠度w'); xlabel('x'); ylabel('y'); zlabel('w'); colorbar;
+    figure;
+    surf(X,Y,w_num); title('Kirchhoff板挠度w'); xlabel('x'); ylabel('y'); zlabel('w'); colorbar;
+end
