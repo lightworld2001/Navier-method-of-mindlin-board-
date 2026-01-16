@@ -34,17 +34,7 @@ A_w = sym('A_w', [num 1]);
 w_expr = 0;
 for idx = 1:num
     mm = m_vec(idx); nn = n_vec(idx);
-    if mm > 0 && nn > 0
-        phi = sin(mm*pi*x/a) * cos(nn*pi*y/b);
-    elseif mm < 0 && nn < 0
-        phi = cos(mm*pi*x/a) * sin(nn*pi*y/b);
-    elseif mm > 0 && nn < 0
-        phi = sin(mm*pi*x/a) * sin(nn*pi*y/b);
-    elseif mm < 0 && nn > 0
-        phi = cos(mm*pi*x/a) * cos(nn*pi*y/b);
-    else
-        phi = 0;
-    end
+    phi = basis_phi(mm, nn, x, y, a, b);
     w_expr = w_expr + A_w(idx)*phi;
 end
 
@@ -59,18 +49,7 @@ Q = sym('Q', [num 1]); % 若有数值系数，可后续赋值 Q_vals 并做 doub
 q_expr = 0;
 for k = 1:num
     mm = m_vec(k); nn = n_vec(k);
-    if mm > 0 && nn > 0
-        phi_k = sin(mm*pi*x/a) * cos(nn*pi*y/b);
-    elseif mm < 0 && nn < 0
-        phi_k = cos(mm*pi*x/a) * sin(nn*pi*y/b);
-    elseif mm > 0 && nn < 0
-        phi_k = sin(mm*pi*x/a) * sin(nn*pi*y/b);
-    elseif mm < 0 && nn > 0
-        phi_k = cos(mm*pi*x/a) * cos(nn*pi*y/b);
-    else
-        phi_k = 0;
-    end
-    q_expr = q_expr + Q(k)*phi_k;
+    q_expr = q_expr + Q(k)*basis_phi(mm, nn, x, y, a, b);
 end
 % 指定载荷作用矩形区域（可修改），若为圆形请用极坐标数值积分
 x1 = 10; x2 = 40; y1 = 10; y2 = 40;
@@ -142,17 +121,7 @@ if exist('Q_vals','var') && numel(Q_vals) == num
         for j = 1:Ny
             for k = 1:num
                 mm = m_vec(k); nn = n_vec(k);
-                if mm > 0 && nn > 0
-                    phi = sin(mm*pi*xv(i)/a) * cos(nn*pi*yv(j)/b);
-                elseif mm < 0 && nn < 0
-                    phi = cos(mm*pi*xv(i)/a) * sin(nn*pi*yv(j)/b);
-                elseif mm > 0 && nn < 0
-                    phi = sin(mm*pi*xv(i)/a) * sin(nn*pi*yv(j)/b);
-                elseif mm < 0 && nn > 0
-                    phi = cos(mm*pi*xv(i)/a) * cos(nn*pi*yv(j)/b);
-                else
-                    phi = 0;
-                end
+                phi = basis_phi(mm, nn, xv(i), yv(j), a, b);
                 w_num(j,i) = w_num(j,i) + Aw_num(k)*phi;
             end
         end
@@ -160,4 +129,18 @@ if exist('Q_vals','var') && numel(Q_vals) == num
 
     figure;
     surf(X,Y,w_num); title('Kirchhoff板挠度w'); xlabel('x'); ylabel('y'); zlabel('w'); colorbar;
+end
+
+function phi = basis_phi(mm, nn, x, y, a, b)
+    if mm > 0 && nn > 0
+        phi = sin(mm*pi*x/a) * cos(nn*pi*y/b);
+    elseif mm < 0 && nn < 0
+        phi = cos(mm*pi*x/a) * sin(nn*pi*y/b);
+    elseif mm > 0 && nn < 0
+        phi = sin(mm*pi*x/a) * sin(nn*pi*y/b);
+    elseif mm < 0 && nn > 0
+        phi = cos(mm*pi*x/a) * cos(nn*pi*y/b);
+    else
+        phi = 0;
+    end
 end
