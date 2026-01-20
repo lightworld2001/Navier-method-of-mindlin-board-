@@ -56,6 +56,22 @@ x1 = 10; x2 = 40; y1 = 10; y2 = 40;
 
 % ---------------- 载荷输入接口（可修改） ----------------
 % 符号求解：保持载荷系数 Q 为符号向量，与试函数基一一对应。
+% 若需均布载荷的数值系数用于绘图，可启用如下投影计算。
+compute_projection = true; % 需要时设为 true，不需要时设为 false
+if compute_projection
+    Q_vals = zeros(num,1);
+    for k = 1:num
+        mm = m_vec(k); nn = n_vec(k);
+        phi_k = @(xx,yy) basis_phi(mm, nn, xx, yy, a, b);
+        numInt = integral2(@(xx,yy) q .* phi_k(xx,yy), x1, x2, y1, y2);
+        denInt = integral2(@(xx,yy) phi_k(xx,yy).^2, x1, x2, y1, y2);
+        if denInt == 0
+            Q_vals(k) = 0;
+        else
+            Q_vals(k) = numInt / denInt;
+        end
+    end
+end
 % ---------------- 载荷输入接口结束 ----------------
 
 W_ext = int(int(q_expr * w_expr, x, x1, x2), y, y1, y2);
@@ -133,13 +149,13 @@ end
 
 function phi = basis_phi(mm, nn, x, y, a, b)
     if mm > 0 && nn > 0
-        phi = sin(mm*pi*x/a) * cos(nn*pi*y/b);
+        phi = sin(mm*pi*x/a) .* cos(nn*pi*y/b);
     elseif mm < 0 && nn < 0
-        phi = cos(mm*pi*x/a) * sin(nn*pi*y/b);
+        phi = cos(mm*pi*x/a) .* sin(nn*pi*y/b);
     elseif mm > 0 && nn < 0
-        phi = sin(mm*pi*x/a) * sin(nn*pi*y/b);
+        phi = sin(mm*pi*x/a) .* sin(nn*pi*y/b);
     elseif mm < 0 && nn > 0
-        phi = cos(mm*pi*x/a) * cos(nn*pi*y/b);
+        phi = cos(mm*pi*x/a) .* cos(nn*pi*y/b);
     else
         phi = 0;
     end
