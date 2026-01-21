@@ -63,8 +63,8 @@ if compute_projection
     for k = 1:num
         mm = m_vec(k); nn = n_vec(k);
         phi_k = @(xx,yy) basis_phi(mm, nn, xx, yy, a, b);
-        numInt = integral2(@(xx,yy) q .* phi_k(xx,yy), x1, x2, y1, y2);
-        denInt = integral2(@(xx,yy) phi_k(xx,yy).^2, x1, x2, y1, y2);
+        numInt = integral2(@(xx,yy) arrayfun(@(x,y) q * phi_k(x,y), xx, yy), x1, x2, y1, y2);
+        denInt = integral2(@(xx,yy) arrayfun(@(x,y) phi_k(x,y)^2, xx, yy), x1, x2, y1, y2);
         if denInt == 0
             Q_vals(k) = 0;
         else
