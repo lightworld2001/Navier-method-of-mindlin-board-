@@ -34,17 +34,7 @@ A_w = sym('A_w', [num 1]);
 w_expr = 0;
 for idx = 1:num
     mm = m_vec(idx); nn = n_vec(idx);
-    if mm > 0 && nn > 0
-        phi = sin(mm*pi*x/a) * cos(nn*pi*y/b);
-    elseif mm < 0 && nn < 0
-        phi = cos(mm*pi*x/a) * sin(nn*pi*y/b);
-    elseif mm > 0 && nn < 0
-        phi = sin(mm*pi*x/a) * sin(nn*pi*y/b);
-    elseif mm < 0 && nn > 0
-        phi = cos(mm*pi*x/a) * cos(nn*pi*y/b);
-    else
-        phi = 0;
-    end
+    phi = basis_phi(mm, nn, x, y, a, b);
     w_expr = w_expr + A_w(idx)*phi;
 end
 
@@ -55,25 +45,35 @@ w_xy = diff(diff(w_expr, x), y);
 
 U_b = 0.5*D*(w_xx^2 + w_yy^2 + 2*nu*w_xx*w_yy + 2*(1-nu)*w_xy^2);
 % 将载荷 q 表示为 Fourier 级数（与基函数相同的 phi 系列），便于与试函数正交
-Q = sym('Q', [num 1]); % 若有数值系数，可 later 赋值 Q_vals 并做 double(Q_vals)
+Q = sym('Q', [num 1]); % 若有数值系数，可后续赋值 Q_vals 并做 double(Q_vals)
 q_expr = 0;
 for k = 1:num
     mm = m_vec(k); nn = n_vec(k);
-    if mm > 0 && nn > 0
-        phi_k = sin(mm*pi*x/a) * cos(nn*pi*y/b);
-    elseif mm < 0 && nn < 0
-        phi_k = cos(mm*pi*x/a) * sin(nn*pi*y/b);
-    elseif mm > 0 && nn < 0
-        phi_k = sin(mm*pi*x/a) * sin(nn*pi*y/b);
-    elseif mm < 0 && nn > 0
-        phi_k = cos(mm*pi*x/a) * cos(nn*pi*y/b);
-    else
-        phi_k = 0;
-    end
-    q_expr = q_expr + Q(k)*phi_k;
+    q_expr = q_expr + Q(k)*basis_phi(mm, nn, x, y, a, b);
 end
 % 指定载荷作用矩形区域（可修改），若为圆形请用极坐标数值积分
 x1 = 10; x2 = 40; y1 = 10; y2 = 40;
+
+% ---------------- 载荷输入接口（可修改） ----------------
+% 符号求解：保持载荷系数 Q 为符号向量，与试函数基一一对应。
+% 若需均布载荷的数值系数用于绘图，可启用如下投影计算。
+compute_projection = true; % 需要时设为 true，不需要时设为 false
+if compute_projection
+    Q_vals = zeros(num,1);
+    for k = 1:num
+        mm = m_vec(k); nn = n_vec(k);
+        phi_k = @(xx,yy) basis_phi(mm, nn, xx, yy, a, b);
+        numInt = integral2(@(xx,yy) arrayfun(@(x,y) q * phi_k(x,y), xx, yy), x1, x2, y1, y2);
+        denInt = integral2(@(xx,yy) arrayfun(@(x,y) phi_k(x,y)^2, xx, yy), x1, x2, y1, y2);
+        if denInt == 0
+            Q_vals(k) = 0;
+        else
+            Q_vals(k) = numInt / denInt;
+        end
+    end
+end
+% ---------------- 载荷输入接口结束 ----------------
+
 W_ext = int(int(q_expr * w_expr, x, x1, x2), y, y1, y2);
 
 % 离散罚系数参数区（位置可自定义）
@@ -122,115 +122,41 @@ for i = 1:length(vars)
     eqs = [eqs; diff(Pi, vars(i)) == 0];
 end
 [A_mat, B_vec] = equationsToMatrix(eqs, vars);
-A_num = double(A_mat);
-B_num = double(B_vec);
-Aw_num = A_num \ B_vec;
+Aw_sym = A_mat \ B_vec; % 纯符号解（与 Q 等符号系数保持一致）
 
-% 数值场表达式与绘图
-%----------------------------------------------------这里是数值场表达式与绘图
-Nx = 40; Ny = 40;
-xv = linspace(0,a,Nx); yv = linspace(0,b,Ny);
-[X,Y] = meshgrid(xv,yv);
-w_num = zeros(Ny,Nx);
-for i = 1:Nx
-    for j = 1:Ny
-        for k = 1:num
-            mm = m_vec(k); nn = n_vec(k);
-            if mm > 0 && nn > 0
-                phi = sin(mm*pi*xv(i)/a) * cos(nn*pi*yv(j)/b);
-            elseif mm < 0 && nn < 0
-                phi = cos(mm*pi*xv(i)/a) * sin(nn*pi*yv(j)/b);
-            elseif mm > 0 && nn < 0
-                phi = sin(mm*pi*xv(i)/a) * sin(nn*pi*yv(j)/b);
-            elseif mm < 0 && nn > 0
-                phi = cos(mm*pi*xv(i)/a) * cos(nn*pi*yv(j)/b);
-            else
-                phi = 0;
-            end
-            w_num(j,i) = w_num(j,i) + Aw_num(k)*phi;
-        end
-    end
-end
-
-figure;
-surf(X,Y,w_num); title('Kirchhoff板挠度w'); xlabel('x'); ylabel('y'); zlabel('w'); colorbar;
-
-% ---------------- 载荷输入接口（可修改） ----------------
-% 你可以使用下面三种方式之一来定义载荷系数 Q:
-% 1) 直接提供数值向量 Q_vals (num x 1)
-%    例： Q_vals = zeros(num,1); Q_vals(1)=500; % 以基函数1为主载荷
-% 2) 如果已有常数面载荷 q0, 可设置 compute_projection = true
-%    脚本会把常数载荷在指定区域上投影到基上，得到 Q_vals
-% 3) 都不设置 -> 保持符号向量 Q（之前的行为）
-
-% 示例（取消注释并按需修改）:
-% Q_vals = zeros(num,1); Q_vals(1) = 1.0; % 用户自行定义数值系数
-% compute_projection = true; % 若为 true，会用 q (脚本顶部的 q 变量) 投影到基上
-
-% 如果要求投影，请确保 x1,x2,y1,y2 已定义（载荷作用区）
-if exist('compute_projection','var') && compute_projection
-    Q_vals = zeros(num,1);
-    for k = 1:num
-        mm = m_vec(k); nn = n_vec(k);
-        if mm > 0 && nn > 0
-            phi_k = sin(mm*pi*x/a) * cos(nn*pi*y/b);
-        elseif mm < 0 && nn < 0
-            phi_k = cos(mm*pi*x/a) * sin(nn*pi*y/b);
-        elseif mm > 0 && nn < 0
-            phi_k = sin(mm*pi*x/a) * sin(nn*pi*y/b);
-        elseif mm < 0 && nn > 0
-            phi_k = cos(mm*pi*x/a) * cos(nn*pi*y/b);
-        else
-            phi_k = 0;
-        end
-        numInt = int(int(q * phi_k, x, x1, x2), y, y1, y2);
-        denInt = int(int(phi_k^2, x, x1, x2), y, y1, y2);
-        numVal = double(numInt);
-        denVal = double(denInt);
-        if denVal == 0
-            Q_vals(k) = 0;
-        else
-            Q_vals(k) = numVal / denVal;
-        end
-    end
-end
-
-% 如果用户提供了数值 Q_vals，使用它来构造 q_expr（覆盖符号 Q）
+% 如果提供数值载荷系数 Q_vals，可用于数值绘图（不影响符号求解）
 if exist('Q_vals','var') && numel(Q_vals) == num
-    q_expr = 0;
-    for k = 1:num
-        mm = m_vec(k); nn = n_vec(k);
-        if mm > 0 && nn > 0
-            phi_k = sin(mm*pi*x/a) * cos(nn*pi*y/b);
-        elseif mm < 0 && nn < 0
-            phi_k = cos(mm*pi*x/a) * sin(nn*pi*y/b);
-        elseif mm > 0 && nn < 0
-            phi_k = sin(mm*pi*x/a) * sin(nn*pi*y/b);
-        elseif mm < 0 && nn > 0
-            phi_k = cos(mm*pi*x/a) * cos(nn*pi*y/b);
-        else
-            phi_k = 0;
+    Aw_num = double(subs(Aw_sym, Q, Q_vals(:)));
+    % 数值场表达式与绘图
+    %----------------------------------------------------这里是数值场表达式与绘图
+    Nx = 40; Ny = 40;
+    xv = linspace(0,a,Nx); yv = linspace(0,b,Ny);
+    [X,Y] = meshgrid(xv,yv);
+    w_num = zeros(Ny,Nx);
+    for i = 1:Nx
+        for j = 1:Ny
+            for k = 1:num
+                mm = m_vec(k); nn = n_vec(k);
+                phi = basis_phi(mm, nn, xv(i), yv(j), a, b);
+                w_num(j,i) = w_num(j,i) + Aw_num(k)*phi;
+            end
         end
-        q_expr = q_expr + Q_vals(k) * phi_k;
     end
-else
-    % 默认符号定义（如果没有提供 Q_vals）
-    Q = sym('Q', [num 1]); % 符号载荷系数
-    q_expr = 0;
-    for k = 1:num
-        mm = m_vec(k); nn = n_vec(k);
-        if mm > 0 && nn > 0
-            phi_k = sin(mm*pi*x/a) * cos(nn*pi*y/b);
-        elseif mm < 0 && nn < 0
-            phi_k = cos(mm*pi*x/a) * sin(nn*pi*y/b);
-        elseif mm > 0 && nn < 0
-            phi_k = sin(mm*pi*x/a) * sin(nn*pi*y/b);
-        elseif mm < 0 && nn > 0
-            phi_k = cos(mm*pi*x/a) * cos(nn*pi*y/b);
-        else
-            phi_k = 0;
-        end
-        q_expr = q_expr + Q(k) * phi_k;
+
+    figure;
+    surf(X,Y,w_num); title('Kirchhoff板挠度w'); xlabel('x'); ylabel('y'); zlabel('w'); colorbar;
+end
+
+function phi = basis_phi(mm, nn, x, y, a, b)
+    if mm > 0 && nn > 0
+        phi = sin(mm*pi*x/a) .* cos(nn*pi*y/b);
+    elseif mm < 0 && nn < 0
+        phi = cos(mm*pi*x/a) .* sin(nn*pi*y/b);
+    elseif mm > 0 && nn < 0
+        phi = sin(mm*pi*x/a) .* sin(nn*pi*y/b);
+    elseif mm < 0 && nn > 0
+        phi = cos(mm*pi*x/a) .* cos(nn*pi*y/b);
+    else
+        phi = 0;
     end
 end
-% ---------------- 载荷输入接口结束 ----------------
